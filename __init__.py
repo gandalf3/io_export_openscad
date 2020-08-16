@@ -106,24 +106,27 @@ class ExportOpenSCAD(Operator, ExportHelper):
         obj_export_dir.mkdir(exist_ok=True)
         
         dep_objs = bool_deps_for_object(ob)
-
+        
+        # awkwardly append a trailing newline
+        scad = scad_for_object(ob,
+                               get_filename = lambda o: "objects" + os.sep + scad_filename(o)) + '\n'
+        
         for obj in old_selection:
             obj.select_set(False)
             
+        orig_modifiers = {}
         for obj in dep_objs:
             obj.select_set(True)
 
-        # stl export behavior depends on the presence of a trailing separator 
-        bpy.ops.export_mesh.stl(filepath=str(obj_export_dir) + os.sep,
-                                batch_mode='OBJECT',
-                                use_selection=True,
-                                check_existing=False,
-                                use_mesh_modifiers=False)
-                                
         try:
-            # awkwardly append a trailing newline
-            scad = scad_for_object(ob,
-                                   get_filename = lambda o: "objects" + os.sep + scad_filename(o)) + '\n'
+            
+            # stl export behavior depends on the presence of a trailing separator 
+            bpy.ops.export_mesh.stl(filepath=str(obj_export_dir) + os.sep,
+                                    batch_mode='OBJECT',
+                                    use_selection=True,
+                                    use_mesh_modifiers=True,
+                                    check_existing=False)
+                                
             scad_export_path.write_text(scad)
             
         finally:
@@ -131,6 +134,8 @@ class ExportOpenSCAD(Operator, ExportHelper):
                 obj.select_set(False)
             for obj in old_selection:
                 obj.select_set(True)
+            for mod, orig_visibility in orig_modifiers.items():
+                mod.show_viewport = orig_visibility
 
         return {'FINISHED'}
 
@@ -152,7 +157,6 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
     # test call
     bpy.ops.export_scene.openscad('INVOKE_DEFAULT')
 
