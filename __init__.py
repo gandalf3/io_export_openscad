@@ -2,7 +2,7 @@ bl_info = {
     "name": "Export boolean modifiers to OpenSCAD",
     "author": "gandalf3",
     "location": "File > Export > OpenSCAD",
-    "version": (0, 0, 2),
+    "version": (0, 0, 3),
     "blender": (2, 80, 0),
     "description": "Export an object and its boolean modifiers to OpenSCAD",
     "doc_url": "https://github.com/gandalf3/io_export_openscad/blob/master/README.md",
