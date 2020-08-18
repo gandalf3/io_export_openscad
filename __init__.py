@@ -20,7 +20,11 @@ import os
 
 from textwrap import indent
 
-indent_str = ' ' * 3
+indent_str = ' ' * 1
+
+import logging
+logger = logging.getLogger('export_openscad')
+logging.basicConfig(level=logging.DEBUG)
 
 def scad_filename(ob):
     # Seems openscad won't load files with more than one `.` in their name
@@ -118,6 +122,14 @@ class ExportOpenSCAD(Operator, ExportHelper):
         orig_modifiers = {}
         for obj in dep_objs:
             obj.select_set(True)
+
+            for mod in obj.modifiers:
+                if mod.type == 'BOOLEAN':
+                    if mod.show_viewport:
+                        orig_modifiers[mod] = True
+                        mod.show_viewport = False
+
+            logger.debug("object %s: disabled %s booleans" % (obj.name, len(orig_modifiers)))
 
         try:
             
