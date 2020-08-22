@@ -2,7 +2,7 @@ bl_info = {
     "name": "Export boolean modifiers to OpenSCAD",
     "author": "gandalf3",
     "location": "File > Export > OpenSCAD",
-    "version": (0, 0, 3),
+    "version": (0, 0, 4),
     "blender": (2, 80, 0),
     "description": "Export an object and its boolean modifiers to OpenSCAD",
     "doc_url": "https://github.com/gandalf3/io_export_openscad/blob/master/README.md",
@@ -107,46 +107,73 @@ class ExportOpenSCAD(Operator, ExportHelper):
         obj_export_dir = export_dir / "objects"
         scad_export_path = export_dir / (str(export_dir.name) + ".scad")
         
-        export_dir.mkdir(exist_ok=True)
-        obj_export_dir.mkdir(exist_ok=True)
-        
         dep_objs = bool_deps_for_object(ob)
         
         # awkwardly append a trailing newline
         scad = scad_for_object(ob,
-                               get_filename = lambda o: "objects" + os.sep + scad_filename(o)) + '\n'
+                               get_filename = lambda o: "objects" + os.sep + scad_filename(o)
+                               ) + '\n'
         
-        for obj in old_selection:
-            obj.select_set(False)
-            
-        orig_modifiers = {}
-        for obj in dep_objs:
-            obj.select_set(True)
-
-            for mod in obj.modifiers:
-                if mod.type == 'BOOLEAN':
-                    if mod.show_viewport:
-                        orig_modifiers[mod] = True
-                        mod.show_viewport = False
-
-            logger.debug("object %s: disabled %s booleans" % (obj.name, len(orig_modifiers)))
-
         try:
-            
-            # stl export behavior depends on the presence of a trailing separator 
-            bpy.ops.export_mesh.stl(filepath=str(obj_export_dir) + os.sep,
-                                    batch_mode='OBJECT',
-                                    use_selection=True,
-                                    use_mesh_modifiers=True,
-                                    check_existing=False)
-                                
-            scad_export_path.write_text(scad)
+
+            for obj in old_selection:
+                obj.select_set(False)
+                
+            orig_modifiers = {}
+            orig_layercollections = {}
+            for obj in dep_objs:
+
+                # If the object is only present in an excluded collection, we are
+                # not allowed to select it and must un-exclude the collection first
+                selectable = False
+                for col in obj.users_collection:
+                    if col.name in bpy.context.view_layer.layer_collection.children:
+                        laycol = bpy.context.view_layer.layer_collection.children[col.name]
+
+                        if laycol.exclude:
+                            orig_layercollections[laycol] = laycol.exclude
+                            laycol.exclude = False
+                            logger.debug("unexcluded collection '%s' in view layer '%s'" % (col.name, bpy.context.view_layer.name))
+
+                        selectable = True
+                        break
+
+                if not selectable:
+                    msg = "Required object '%s' is not selectable; perhaps it is not in any collection in the current view layer (%s)?" % (obj.name, bpy.context.view_layer.name)
+                    logger.error(msg)
+                    raise RuntimeError(msg)
+
+                obj.select_set(True)
+
+                for mod in obj.modifiers:
+                    if mod.type == 'BOOLEAN':
+                        if mod.show_viewport:
+                            orig_modifiers[mod] = True
+                            mod.show_viewport = False
+
+                logger.debug("object %s: disabled %s booleans" % (obj.name, len(orig_modifiers)))
+                
+                # create target directories at the last minute avoid altering
+                # filesystem except in case of success
+                export_dir.mkdir(exist_ok=True)
+                obj_export_dir.mkdir(exist_ok=True)
+
+                # stl export behavior depends on the presence of a trailing separator 
+                bpy.ops.export_mesh.stl(filepath=str(obj_export_dir) + os.sep,
+                                        batch_mode='OBJECT',
+                                        use_selection=True,
+                                        use_mesh_modifiers=True,
+                                        check_existing=False)
+                                    
+                scad_export_path.write_text(scad)
             
         finally:
             for obj in dep_objs:
                 obj.select_set(False)
             for obj in old_selection:
                 obj.select_set(True)
+            for laycol, orig_exclude in orig_layercollections:
+                laycol.exclude = orig_exclude
             for mod, orig_visibility in orig_modifiers.items():
                 mod.show_viewport = orig_visibility
 
