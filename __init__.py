@@ -73,6 +73,19 @@ def bool_deps_for_object(ob):
 def print_scad_for_active_object():
     ob = bpy.context.active_object
     print(scad_for_object(ob))
+
+
+def find_viewlayer_collection(collection_name):
+    def _recurse(collection_name, cur_layer_col):
+        if collection_name in cur_layer_col.children:
+            return cur_layer_col.children[collection_name]
+
+        for child_collection in cur_layer_col.children:
+            return _recurse(collection_name, child_collection)
+
+        return None
+
+    return _recurse(collection_name, bpy.context.view_layer.layer_collection)
     
 
 class ExportOpenSCAD(Operator, ExportHelper):
@@ -127,9 +140,9 @@ class ExportOpenSCAD(Operator, ExportHelper):
                 # not allowed to select it and must un-exclude the collection first
                 selectable = False
                 for col in obj.users_collection:
-                    if col.name in bpy.context.view_layer.layer_collection.children:
-                        laycol = bpy.context.view_layer.layer_collection.children[col.name]
+                    laycol = find_viewlayer_collection(col.name)
 
+                    if (laycol is not None):
                         if laycol.exclude:
                             orig_layercollections[laycol] = laycol.exclude
                             laycol.exclude = False
@@ -145,13 +158,15 @@ class ExportOpenSCAD(Operator, ExportHelper):
 
                 obj.select_set(True)
 
+                disable_count = 0
                 for mod in obj.modifiers:
                     if mod.type == 'BOOLEAN':
                         if mod.show_viewport:
                             orig_modifiers[mod] = True
                             mod.show_viewport = False
+                            disable_count += 1
 
-                logger.debug("object %s: disabled %s booleans" % (obj.name, len(orig_modifiers)))
+                logger.debug("object %s: disabled %s booleans" % (obj.name, disable_count))
                 
                 # create target directories at the last minute avoid altering
                 # filesystem except in case of success
@@ -172,7 +187,7 @@ class ExportOpenSCAD(Operator, ExportHelper):
                 obj.select_set(False)
             for obj in old_selection:
                 obj.select_set(True)
-            for laycol, orig_exclude in orig_layercollections:
+            for laycol, orig_exclude in orig_layercollections.items():
                 laycol.exclude = orig_exclude
             for mod, orig_visibility in orig_modifiers.items():
                 mod.show_viewport = orig_visibility
