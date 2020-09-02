@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Callable
 import bpy
 import os
+import re
 
 from textwrap import indent
 
@@ -29,7 +30,7 @@ logging.basicConfig(level=logging.DEBUG)
 def scad_filename(ob):
     # Seems openscad won't load files with more than one `.` in their name
     # but will load `sadf.fdas.stl` when given a name with underscores like `sadf_fdas.stl`.
-    return ob.name.replace('.', '_') + ".stl"
+    return re.sub('\.| ', '_', ob.name) + '.stl'
     
 def scad_for_object(ob, get_filename:Callable = lambda x: scad_filename(x)):
     
